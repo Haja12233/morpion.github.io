@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu du Morpion (Tic-Tac-Toe)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease;
+        }
+        
+        .cell {
+            width: 100px;
+            height: 100px;
+            border: 3px solid #4B5563;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: bold;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .cell:hover {
+            background-color: #F3F4F6;
+        }
+        
+        .cell.x::before, .cell.x::after {
+            content: '';
+            position: absolute;
+            width: 80%;
+            height: 8px;
+            background: #3B82F6;
+            border-radius: 4px;
+        }
+        
+        .cell.x::before {
+            transform: rotate(45deg);
+        }
+        
+        .cell.x::after {
+            transform: rotate(-45deg);
+        }
+        
+        .cell.o::before {
+            content: '';
+            position: absolute;
+            width: 60%;
+            height: 60%;
+            border: 8px solid #EF4444;
+            border-radius: 50%;
+        }
+        
+        .win-line {
+            position: absolute;
+            background: linear-gradient(90deg, #10B981, #34D399);
+            height: 8px;
+            border-radius: 4px;
+            z-index: 10;
+            animation: drawLine 0.5s ease-out forwards;
+        }
+        
+        @keyframes drawLine {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background: #F59E0B;
+            border-radius: 50%;
+            animation: fall linear forwards;
+        }
+        
+        @keyframes fall {
+            to { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-2xl w-full bg-white rounded-2xl shadow-2xl p-8">
+        <!-- En-tête du jeu -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">🎮 Jeu du Morpion</h1>
+            <p class="text-gray-600">Le classique jeu de stratégie à deux joueurs</p>
+        </div>
+        
+        <!-- Indicateur de tour -->
+        <div id="turn-indicator" class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-lg mb-6">
+            <p class="font-semibold">Tour du joueur: <span id="current-player" class="text-2xl">X</span></p>
+        </div>
+        
+        <!-- Grille de jeu -->
+        <div class="grid grid-cols-3 gap-4 mb-8 relative" id="game-board">
+            <!-- Les cellules seront générées dynamiquement -->
+        </div>
+        
+        <!-- Score et statistiques -->
+        <div class="grid grid-cols-3 gap-4 mb-8">
+            <div class="bg-blue-50 p-4 rounded-lg text-center">
+                <h3 class="text-sm font-semibold text-blue-600 mb-1">Joueur X</h3>
+                <p class="text-2xl font-bold text-blue-700" id="score-x">0</p>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg text-center">
+                <h3 class="text-sm font-semibold text-gray-600 mb-1">Égalités</h3>
+                <p class="text-2xl font-bold text-gray-700" id="score-draw">0</p>
+            </div>
+            <div class="bg-red-50 p-4 rounded-lg text-center">
+                <h3 class="text-sm font-semibold text-red-600 mb-1">Joueur O</h3>
+                <p class="text-2xl font-bold text-red-700" id="score-o">0</p>
+            </div>
+        </div>
+        
+        <!-- Contrôles -->
+        <div class="flex gap-4 justify-center">
+            <button id="reset-btn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                🔄 Nouvelle Partie
+            </button>
+            <button id="reset-score-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                📊 Réinitialiser Scores
+            </button>
+        </div>
+        
+        <!-- Message de résultat -->
+        <div id="result-message" class="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+            <div class="bg-white p-8 rounded-2xl text-center max-w-md mx-4">
+                <h2 class="text-2xl font-bold mb-4" id="result-text">Victoire !</h2>
+                <p class="text-gray-600 mb-6" id="result-details">Le joueur X a gagné !</p>
+                <button onclick="hideResult()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg">
+                    Continuer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // État du jeu
+        let gameState = ['', '', '', '', '', '', '', '', ''];
+        let currentPlayer = 'X';
+        let gameActive = true;
+        let scores = { X: 0, O: 0, draw: 0 };
+        
+        // Conditions de victoire
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Lignes
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Colonnes
+            [0, 4, 8], [2, 4, 6]             // Diagonales
+        ];
+        
+        // Initialisation du jeu
+        function initializeGame() {
+            const gameBoard = document.getElementById('game-board');
+            gameBoard.innerHTML = '';
+            
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.setAttribute('data-index', i);
+                cell.addEventListener('click', () => handleCellClick(i));
+                gameBoard.appendChild(cell);
+            }
+            
+            updateGameState();
+        }
+        
+        // Gestion du clic sur une cellule
+        function handleCellClick(index) {
+            if (gameState[index] !== '' || !gameActive) return;
+            
+            gameState[index] = currentPlayer;
+            updateGameState();
+            
+            if (checkWinner()) {
+                handleGameResult('win');
+                return;
+            }
+            
+            if (checkDraw()) {
+                handleGameResult('draw');
+                return;
+            }
+            
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            updateTurnIndicator();
+        }
+        
+        // Mise à jour de l'état du jeu
+        function updateGameState() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach((cell, index) => {
+                cell.className = 'cell';
+                if (gameState[index] === 'X') {
+                    cell.classList.add('x');
+                } else if (gameState[index] === 'O') {
+                    cell.classList.add('o');
+                }
+            });
+        }
+        
+        // Vérification de victoire
+        function checkWinner() {
+            for (const condition of winningConditions) {
+                const [a, b, c] = condition;
+                if (gameState[a] && gameState[a] === gameState[b] && gameState[a] === gameState[c]) {
+                    drawWinningLine(condition);
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // Vérification d'égalité
+        function checkDraw() {
+            return !gameState.includes('');
+        }
+        
+        // Dessiner la ligne de victoire
+        function drawWinningLine(winningCombo) {
+            const gameBoard = document.getElementById('game-board');
+            const [a, b, c] = winningCombo;
+            
+            const cellA = document.querySelector(`[data-index="${a}"]`);
+            const cellC = document.querySelector(`[data-index="${c}"]`);
+            
+            const rectA = cellA.getBoundingClientRect();
+            const rectC = cellC.getBoundingClientRect();
+            const rectBoard = gameBoard.getBoundingClientRect();
+            
+            const line = document.createElement('div');
+            line.className = 'win-line';
+            
+            // Positionner la ligne selon l'orientation de la combinaison gagnante
+            if (a % 3 === 0 && c % 3 === 2) { // Ligne horizontale
+                line.style.width = `${rectC.right - rectA.left}px`;
+                line.style.top = `${rectA.top + rectA.height/2 - rectBoard.top - 4}px`;
+                line.style.left = `${rectA.left - rectBoard.left}px`;
+            } else if (a < 3 && c > 5) { // Ligne verticale
+                line.style.width = `${rectC.bottom - rectA.top}px`;
+                line.style.transform = 'rotate(90deg)';
+                line.style.top = `${rectA.top - rectBoard.top}px`;
+                line.style.left = `${rectA.left + rectA.width/2 - rectBoard.left - 4}px`;
+            } else { // Diagonale
+                const diagonalLength = Math.sqrt(Math.pow(rectC.right - rectA.left, 2) + Math.pow(rectC.bottom - rectA.top, 2));
+                const angle = Math.atan2(rectC.bottom - rectA.top, rectC.right - rectA.left) * 180 / Math.PI;
+                
+                line.style.width = `${diagonalLength}px`;
+                line.style.top = `${rectA.top - rectBoard.top + rectA.height/2}px`;
+                line.style.left = `${rectA.left - rectBoard.left}px`;
+                line.style.transform = `rotate(${angle}deg)`;
+                line.style.transformOrigin = '0 0';
+            }
+            
+            gameBoard.appendChild(line);
+        }
+        
+        // Gestion du résultat du jeu
+        function handleGameResult(result) {
+            gameActive = false;
+            
+            if (result === 'win') {
+                scores[currentPlayer]++;
+                document.getElementById(`score-${currentPlayer.toLowerCase()}`).textContent = scores[currentPlayer];
+                showResult(`Victoire du joueur ${currentPlayer} !`, `Félicitations ! Le joueur ${currentPlayer} remporte la partie.`);
+                createConfetti();
+            } else {
+                scores.draw++;
+                document.getElementById('score-draw').textContent = scores.draw;
+                showResult('Égalité !', 'Aucun joueur n\'a pu l\'emporter. Bien joué à tous les deux !');
+            }
+        }
+        
+        // Affichage du résultat
+        function showResult(title, message) {
+            const resultMessage = document.getElementById('result-message');
+            const resultText = document.getElementById('result-text');
+            const resultDetails = document.getElementById('result-details');
+            
+            resultText.textContent = title;
+            resultDetails.textContent = message;
+            resultMessage.classList.remove('hidden');
+        }
+        
+        function hideResult() {
+            document.getElementById('result-message').classList.add('hidden');
+        }
+        
+        // Mise à jour de l'indicateur de tour
+        function updateTurnIndicator() {
+            const indicator = document.getElementById('turn-indicator');
+            const playerSpan = document.getElementById('current-player');
+            
+            playerSpan.textContent = currentPlayer;
+            
+            if (currentPlayer === 'X') {
+                indicator.className = 'bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-lg mb-6';
+            } else {
+                indicator.className = 'bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg mb-6';
+            }
+        }
+        
+        // Réinitialisation du jeu
+        function resetGame() {
+            gameState = ['', '', '', '', '', '', '', '', ''];
+            currentPlayer = 'X';
+            gameActive = true;
+            
+            // Supprimer les lignes de victoire
+            const winningLines = document.querySelectorAll('.win-line');
+            winningLines.forEach(line => line.remove());
+            
+            updateGameState();
+            updateTurnIndicator();
+        }
+        
+        // Réinitialisation des scores
+        function resetScores() {
+            scores = { X: 0, O: 0, draw: 0 };
+            document.getElementById('score-x').textContent = '0';
+            document.getElementById('score-o').textContent = '0';
+            document.getElementById('score-draw').textContent = '0';
+            resetGame();
+        }
+        
+        // Animation de confetti
+        function createConfetti() {
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.top = '-10px';
+                confetti.style.background = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6'][Math.floor(Math.random() * 5)];
+                confetti.style.animationDuration = (Math.random() * 3 + 2) + 's';
+                document.body.appendChild(confetti);
+                
+                setTimeout(() => {
+                    confetti.remove();
+                }, 5000);
+            }
+        }
+        
+        // Événements
+        document.getElementById('reset-btn').addEventListener('click', resetGame);
+        document.getElementById('reset-score-btn').addEventListener('click', resetScores);
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeGame();
+            updateTurnIndicator();
+        });
+    </script>
+</body>
+</html>
+
